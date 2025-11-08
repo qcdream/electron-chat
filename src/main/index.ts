@@ -1,9 +1,9 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-function createWindow(): void {
+async function createWindow(): Promise<void> {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 900,
@@ -13,62 +13,128 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
     }
   })
+
+  // 设置可选代理（读取环境变量）
+  const proxyRules = process.env.ELECTRON_PROXY || process.env.HTTP_PROXY || process.env.HTTPS_PROXY
+  if (proxyRules) {
+    try {
+      // 让 Chromium 整体走代理（兜底方案）
+      app.commandLine.appendSwitch('proxy-server', proxyRules)
+      // 同步设置默认会话代理，且在加载 URL 前等待完成，避免竞争条件
+      await session.defaultSession.setProxy({ proxyRules })
+      console.log('Proxy applied:', proxyRules)
+    } catch (err) {
+      console.warn('Set proxy failed:', err)
+    }
+  }
+
+  // 加载 Messenger 页面
+  mainWindow.loadURL('https://webogram.org/')
+
+  // 开启开发者工具（调试用）
+  if (is.dev) {
+    mainWindow.webContents.openDevTools({ mode: 'undocked' })
+  }
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
+  // 允许 Messenger 在登录或打开会话时弹出新窗口
+  mainWindow.webContents.setWindowOpenHandler((_details) => {
+    return { action: 'allow' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  // 开发期容错：若 Messenger 加载失败，回退到本地渲染页，避免空白窗口
+  let proxyResetAttempted = false
+  mainWindow.webContents.on('did-fail-load', async (_event, errorCode, errorDesc, validatedURL) => {
+    console.warn('Failed to load URL:', validatedURL, errorCode, errorDesc)
+    // 如果是代理问题，尝试关闭代理并重试加载 Messenger
+    if (!proxyResetAttempted && errorCode === -130 /* ERR_PROXY_CONNECTION_FAILED */) {
+      proxyResetAttempted = true
+      try {
+        await session.defaultSession.setProxy({ proxyRules: 'direct://' })
+        console.log('Proxy disabled. Retrying webogram...')
+        mainWindow.loadURL('https://webogram.org/')
+        return
+      } catch (e) {
+        console.warn('Disable proxy failed:', e)
+      }
+    }
+
+    // 开发期容错：若 Messenger 加载失败，回退到本地渲染页，避免空白窗口
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    } else {
+      mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    }
+  })
+
+  // 默认使用 Messenger；必要时通过 did-fail-load 事件回退到本地页面
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  // IPC：翻译文本（使用 Google 公开接口）
+  ipcMain.handle('translate', async (_event, payload: { text: string; to?: string }) => {
+    console.log('begin translate000')
+    try {
+      const to = payload?.to || 'en'
+      const q = payload?.text || ''
+      if (!q.trim()) return { ok: true, text: q }
+
+      // 使用 Google translate 的公开端点（gtx 客户端）
+      const url =
+        'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' +
+        encodeURIComponent(to) +
+        '&dt=t&q=' +
+        encodeURIComponent(q)
+
+      const res = await fetch(url)
+      const data = await res.json()
+      // data 结构：[[[translated, original, null, null], ...], ...]
+      const translated = Array.isArray(data) && Array.isArray(data[0])
+        ? data[0].map((seg: any) => (Array.isArray(seg) ? seg[0] : '')).join('')
+        : ''
+      return { ok: true, text: translated }
+    } catch (err) {
+      console.warn('Translate failed:', err)
+      return { ok: false, error: String(err) }
+    }
+  })
+
+  // IPC：设置代理
+  ipcMain.handle('set-proxy', async (_event, proxy: string) => {
+    try {
+      await session.defaultSession.setProxy({ proxyRules: proxy })
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
+  })
 
   createWindow()
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.

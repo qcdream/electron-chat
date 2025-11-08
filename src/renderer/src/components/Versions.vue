@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
+// 在纯浏览器预览时 window.electron 不存在，需兜底以避免报错
+const safeVersions = ((): Record<string, string> => {
+  const ve = (globalThis as any)?.window?.electron?.process?.versions
+  if (ve && typeof ve === 'object') return ve as Record<string, string>
+  return { electron: '-', chrome: '-', node: '-' }
+})()
 
-const versions = reactive({ ...window.electron.process.versions })
+const versions = reactive({ ...safeVersions })
 </script>
 
 <template>
