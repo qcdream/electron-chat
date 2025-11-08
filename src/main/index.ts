@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { setupIpcHandlers } from './ipc'
 
 async function createWindow(): Promise<void> {
   // Create the browser window.
@@ -38,7 +39,7 @@ async function createWindow(): Promise<void> {
 
   // 开启开发者工具（调试用）
   if (is.dev) {
-    mainWindow.webContents.openDevTools({ mode: 'undocked' })
+    // mainWindow.webContents.openDevTools({ mode: 'undocked' })
   }
 
   mainWindow.on('ready-to-show', () => {
@@ -87,43 +88,8 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC：翻译文本（使用 Google 公开接口）
-  ipcMain.handle('translate', async (_event, payload: { text: string; to?: string }) => {
-    console.log('begin translate000')
-    try {
-      const to = payload?.to || 'en'
-      const q = payload?.text || ''
-      if (!q.trim()) return { ok: true, text: q }
-
-      // 使用 Google translate 的公开端点（gtx 客户端）
-      const url =
-        'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' +
-        encodeURIComponent(to) +
-        '&dt=t&q=' +
-        encodeURIComponent(q)
-
-      const res = await fetch(url)
-      const data = await res.json()
-      // data 结构：[[[translated, original, null, null], ...], ...]
-      const translated = Array.isArray(data) && Array.isArray(data[0])
-        ? data[0].map((seg: any) => (Array.isArray(seg) ? seg[0] : '')).join('')
-        : ''
-      return { ok: true, text: translated }
-    } catch (err) {
-      console.warn('Translate failed:', err)
-      return { ok: false, error: String(err) }
-    }
-  })
-
-  // IPC：设置代理
-  ipcMain.handle('set-proxy', async (_event, proxy: string) => {
-    try {
-      await session.defaultSession.setProxy({ proxyRules: proxy })
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
-  })
+  // 注册独立模块的 IPC 处理
+  setupIpcHandlers()
 
   createWindow()
 
