@@ -185,6 +185,7 @@ export function attachInterceptor(deps: {
       schedulePrefetch(text)
     })
 
+    // 拦截输入框回车
     composer.addEventListener(
       'keydown',
       async (ev: KeyboardEvent) => {
@@ -226,6 +227,72 @@ export function attachInterceptor(deps: {
       },
       true
     )
+
+    // 捕获按钮点击（aria-label="Send Message"），实现与回车一致的拦截与翻译
+    if (!(document as any)._sendMessageClickHooked) {
+      ;(document as any)._sendMessageClickHooked = true
+      document.addEventListener(
+        'click',
+        async (ev: MouseEvent) => {
+          if (!ev.isTrusted) return
+          const target = ev.target as HTMLElement | null
+          const btn = target?.closest('button[aria-label="Send Message"]') as HTMLButtonElement | null
+          if (!btn) return
+
+          const composerNow = findComposer()
+          if (!composerNow) return
+
+          // 阻止站点默认发送，先翻译再触发发送
+          ev.preventDefault()
+          ev.stopPropagation()
+
+          const text = (composerNow as any).innerText?.trim() || ''
+          if (!text) {
+            // 空文本直接用键盘事件交给站点处理
+            const kd = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })
+            const kp = new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', bubbles: true })
+            const ku = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true })
+            composerNow.dispatchEvent(kd)
+            composerNow.dispatchEvent(kp)
+            composerNow.dispatchEvent(ku)
+            return
+          }
+
+          let final = text
+          if (containsChinese(text)) {
+            try {
+              let en: string | undefined = translateCache.get(text)
+              if (!en) {
+                const lastText = getLastPrefetchText()
+                const lastPromise = getLastPrefetchPromise()
+                if (lastText === text && lastPromise) {
+                  try {
+                    en = await withTimeout(lastPromise, sendWaitMs)
+                  } catch {}
+                }
+              }
+              if (!en) {
+                en = await withTimeout(translateToEnglish(text), sendWaitMs)
+                translateCache.set(text, en)
+              }
+              final = buildBilingual(text, en)
+            } catch {
+              final = buildBilingual(text, text)
+            }
+          }
+
+          setComposerText(composerNow, final)
+          // 用非可信键盘事件触发发送，避免再次进入我们的 keydown 拦截
+          const kd = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })
+          const kp = new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', bubbles: true })
+          const ku = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true })
+          composerNow.dispatchEvent(kd)
+          composerNow.dispatchEvent(kp)
+          composerNow.dispatchEvent(ku)
+        },
+        true
+      )
+    }
     return true
   }
 
