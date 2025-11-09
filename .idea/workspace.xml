@@ -5,7 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7d79d921-f041-4174-9dd6-e103f9d54215" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/src/preload/utils.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/preload/utils.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/ipc.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/ipc.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -28,7 +30,7 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "develop",
+    "git-widget-placeholder": "v0.1.0",
     "last_opened_file_path": "D:/project/demo/electron-chat",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
