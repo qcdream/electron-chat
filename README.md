@@ -5,7 +5,7 @@
 ## 特性
 - 本地翻译，无需外部翻译 API：`Xenova/opus-mt-zh-en` 与 `Xenova/opus-mt-en-zh`
 - 默认使用国内镜像下载模型：`https://hf-mirror.com`
-- 模型缓存到用户数据目录：`%APPDATA%\my-app\models`
+- 模型缓存到用户数据目录：`%APPDATA%\electron-chat\models`
 - 输入预取与超时限制：输入时预取，发送最多等待 500ms
 
 ## 快速开始
@@ -50,7 +50,7 @@ window.api.translate('你好', 'en').then(console.log)
 ```
 
 ## 模型缓存与镜像
-- 缓存目录：`%APPDATA%\my-app\models`（Electron `app.getPath('userData')/models`）。
+- 缓存目录：`%APPDATA%\electron-chat\models`（Electron `app.getPath('userData')/models`）。
 - 默认镜像：`hf-mirror.com`（在 `src/main/ipc.ts` 中通过 `env.remoteHost` 配置）。
 - 若缓存损坏，主进程会尝试校验并清理后重试加载。
 
@@ -60,14 +60,14 @@ window.api.translate('你好', 'en').then(console.log)
 node download-models.js --proxy
 ```
 脚本会把模型下载到本项目的 `models/` 目录。完成后：
-1. 将整个 `models` 文件夹复制到 `%APPDATA%\my-app\` 目录下（最终路径形如 `%APPDATA%\my-app\models\Xenova/opus-mt-zh-en`）。
+1. 将整个 `models` 文件夹复制到 `%APPDATA%\electron-chat\` 目录下（最终路径形如 `%APPDATA%\electron-chat\models\Xenova/opus-mt-zh-en`）。
 2. 重新启动应用：`pnpm dev`
 
 提示：`--proxy` 会使用 `HTTP_PROXY/HTTPS_PROXY` 或默认 `http://127.0.0.1:7897` 进行下载；请按需设置协议与端口。
 
 ## 清理模型缓存
 模型文件损坏或过期时可清理缓存后重试：
-- 手动删除：移除 `%APPDATA%\my-app\models\Xenova` 下对应模型文件夹。
+- 手动删除：移除 `%APPDATA%\electron-chat\models\Xenova` 下对应模型文件夹。
 - 或在主进程通过 IPC 调用：`ipcMain.handle('clear-model-cache', ...)`（可按需为 UI 暴露入口）。
 
 ## 常见问题
