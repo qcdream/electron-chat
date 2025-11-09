@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, session } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -21,9 +21,13 @@ async function createWindow(): Promise<void> {
   })
 
   // 设置可选代理（读取环境变量）
-  const proxyRules = process.env.ELECTRON_PROXY || process.env.HTTP_PROXY || process.env.HTTPS_PROXY
+  const proxyRules = process.env.ELECTRON_PROXY || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || 'http://127.0.0.1:7897'
   if (proxyRules) {
     try {
+      // 同步为 Node 主进程设置代理环境变量，供 undici/fetch 使用（Transformers.js 下载模型）
+      if (!process.env.HTTP_PROXY) process.env.HTTP_PROXY = proxyRules
+      if (!process.env.HTTPS_PROXY) process.env.HTTPS_PROXY = proxyRules
+
       // 让 Chromium 整体走代理（兜底方案）
       app.commandLine.appendSwitch('proxy-server', proxyRules)
       // 同步设置默认会话代理，且在加载 URL 前等待完成，避免竞争条件
@@ -35,7 +39,7 @@ async function createWindow(): Promise<void> {
   }
 
   // 加载 Messenger 页面
-  mainWindow.loadURL('https://webogram.org/')
+  mainWindow.loadURL('https://web.telegram.org/a/')
 
   // 开启开发者工具（调试用）
   if (is.dev) {
@@ -61,7 +65,7 @@ async function createWindow(): Promise<void> {
       try {
         await session.defaultSession.setProxy({ proxyRules: 'direct://' })
         console.log('Proxy disabled. Retrying webogram...')
-        mainWindow.loadURL('https://webogram.org/')
+        mainWindow.loadURL('https://web.telegram.org/a/')
         return
       } catch (e) {
         console.warn('Disable proxy failed:', e)
