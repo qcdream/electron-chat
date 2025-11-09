@@ -123,8 +123,7 @@ async function main() {
   for (const [modelName, files] of Object.entries(models)) {
     await downloadModel(modelName, files);
   }
-  
-  console.log('\n✅ All models downloaded!');
+
   console.log(`📂 Models location: ${path.join(__dirname, 'models')}`);
   console.log('\n💡 Next steps:');
   console.log('   1. 将 models 文件夹复制到 %APPDATA%\\my-app\\ 目录下');
